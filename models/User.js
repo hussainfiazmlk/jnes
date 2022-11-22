@@ -19,15 +19,13 @@ module.exports.definition = {
   fullName: {
     type: DataTypes.STRING
   },
-  userName: {
+  username: {
     type: DataTypes.STRING,
-    allowNull: true,
-    unique: "userName"
+    unique: "username"
   },
   email: {
     type: DataTypes.STRING,
-    required: true,
-    allowNull: true,
+    allowNull: false,
     unique: "email",
     validate: {
       isEmail: {
@@ -38,6 +36,10 @@ module.exports.definition = {
   },
   mobileNo: {
     type: DataTypes.STRING,
+  },
+  role: {
+    type: DataTypes.STRING,
+    defaultValue: 'loggedIn'
   },
   password: {
     type: DataTypes.STRING,
@@ -53,10 +55,7 @@ module.exports.definition = {
   },
   city: {
     type: DataTypes.STRING,
-  },
-  type: {
-    type: DataTypes.STRING
-  },
+  }
 };
 
 module.exports.relations = {

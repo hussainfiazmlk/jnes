@@ -7,6 +7,8 @@ const morgan = require("morgan");
 
 const CRUD = require('./generic/Crud');
 const API = require("./generic/API");
+const Auth = require('./generic/Auth');
+const { authenticate_token } = require('./middleware/auth');
 
 // fetch all env setting
 dotenv.config();
@@ -31,9 +33,12 @@ app.get('/', (req, res) => {
 // call generic api
 const crud = new CRUD();
 const api = new API(crud);
+const auth = new Auth(crud);
 
-app.post('/api/v1/:table', async (req, res) => api.create(req, res));
-app.get('/api/v1/:table/:id?', async (req, res) => api.read(req, res));
+app.post('/api/v1/auth/:method', (req, res) => auth[req.params.method](req, res));
+
+app.post('/api/v1/:table', (req, res) => api.create(req, res));
+app.get('/api/v1/:table/:id?', authenticate_token, (req, res) => api.read(req, res));
 app.patch('/api/v1/:table/:id', (req, res) => api.update(req, res));
 app.delete('/api/v1/:table/:id', (req, res) => api.update(req, res));          // hidden data
 app.delete('/api/v1/delete/:table/:id', (req, res) => api.delete(req, res));  // delete data permanently

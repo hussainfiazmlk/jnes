@@ -8,6 +8,10 @@ class API {
       const { table } = req.params;
       const data = req.body;
 
+      if (table == 'User') {
+        return res.status(400).json({ success: false, error: "you don't have permision to create user" });
+      }
+
       const result = await this.crud.create(table, data);
 
       if (result.status !== 201) {
@@ -32,7 +36,7 @@ class API {
 
 
       if (result.status !== 200) {
-        return res.status(result.status).json({ success: false, data: result.error });
+        return res.status(result.status).json({ success: false, error: result.error });
       }
 
       res.status(result.status).json({ success: true, totalPages: result.totalPages, totalRecordsInDB: result.totalRecordsInDB, totalRecord: result.totalRecord, data: result.data });

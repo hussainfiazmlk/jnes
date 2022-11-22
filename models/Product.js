@@ -60,3 +60,5 @@ module.exports.definition = {
         type: DataTypes.FLOAT
     },
 };
+
+module.exports.isPublic = true;
