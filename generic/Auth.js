@@ -111,6 +111,84 @@ class Auth {
       res.status(400).json({ success: false, error: error });
     }
   };
+
+  authenticate_token = async (req, res, next) => {
+    try {
+      // public access
+      if (req.method === 'GET') {
+        const modelPath = process.cwd() + /models/;
+        console.log(modelPath);
+        let table = req.params.table;
+        let modelJson = require(modelPath + table);
+        (modelJson.isPublic) && next();
+      } else {
+        // 1) Getting token and check it's there
+        let token;
+        if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+          token = req.headers.authorization.split(' ')[1];
+        }
+
+        if (!token) {
+          return res.status(401).json({ success: false, error: 'unauthorized' });
+        }
+
+        // 2) Verification token
+        const cryptr = new Cryptr(process.env.TOKEN_SECRET);
+        const decoded = jwt.verify(cryptr.decrypt(token), process.env.TOKEN_SECRET);
+
+        // 3) Check if user still exists
+        const currentUser = await this.crud.read(this.table, { id: decoded.user.id });
+        if (!currentUser) {
+          return res.status(401).json({ success: false, error: 'unauthorized' });
+        }
+
+        // 4) Check if user changed password after the token was issued
+        if (decoded.user.password !== currentUser.data[0].password) {
+          return res.status(401).json({ success: false, error: 'unauthorized' });
+        }
+
+        req.user = decoded.user;
+        next();
+      }
+    } catch (error) {
+      return res.status(401).json({ success: false, error: 'unauthorized' });
+    }
+  };
+
+  updatePassword = async (req, res) => {
+    try {
+      let { currentPassword, newPassword, confirmPassword } = req.body;
+      // Get Current User
+      const user = req.user;
+
+      // Check if provided current password is correct
+      const comparePassword = await bcrypt.compare(currentPassword, user.password);
+      if (!comparePassword) {
+        return res.status(400).json({ success: false, error: "Current Password is not correct" });
+      }
+
+      // Check newPassowrd
+      if (newPassword !== confirmPassword) {
+        return res.status(400).json({ success: false, error: "newPassword and confirmPassword not match" });
+      }
+
+      // Update Password
+      newPassword = await bcrypt.hash(newPassword, 12);
+      const id = user.id;
+      const data = { password: newPassword };
+
+      const result = await this.crud.update(this.table, data, id);
+
+      if (result.status !== 200) {
+        return res.status(result.status).json({ success: false, error: result.error });
+      }
+
+
+      res.status(result.status).json({ success: true, data: "Password Changed Successfully! Please login again" });
+    } catch (error) {
+      res.status(400).json({ success: false, error: error });
+    }
+  };
 }
 
 module.exports = Auth;
