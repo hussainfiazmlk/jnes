@@ -34,11 +34,11 @@ module.exports.definition = {
       },
     },
   },
-  emailVerificationCode: {
-    type: DataTypes.INTEGER
-  },
   mobileNo: {
     type: DataTypes.STRING,
+  },
+  verifyCode: {
+    type: DataTypes.INTEGER
   },
   role: {
     type: DataTypes.STRING,

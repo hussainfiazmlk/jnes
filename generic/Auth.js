@@ -33,11 +33,11 @@ class Auth {
       }
 
       // six digit email verification code
-      const emailcode = Math.floor(100000 + Math.random() * 900000);
+      const codeToVerify = Math.floor(100000 + Math.random() * 900000);
 
       req.body.password = await bcrypt.hash(password, 12);
       req.body.role = "loggedIn";
-      req.body.emailVerificationCode = emailcode;
+      req.body.verifyCode = codeToVerify;
 
       const data = { email };
 
@@ -52,6 +52,8 @@ class Auth {
         return res.status(result.status).json({ success: false, data: result.error });
       }
 
+      // TODO: send email verification code to provided email address
+
       res.status(result.status).json({ success: true, data: "Register successfully! Please Verify your email" });
 
     } catch (error) {
@@ -59,44 +61,53 @@ class Auth {
     }
   };
 
-  verifyEmail = async (req, res) => {
+  verifyCode = async (req, res) => {
     try {
-      let data = { email: req.body.email };
+      const { email, mobileNo, verifyCode } = req.body;
+
+      let data;
+
+      if (email) {
+        data = { email };
+      }
+      if (mobileNo) {
+        data = { mobileNo: mobileNo };
+      }
 
       const result = await this.crud.read(this.table, data);
 
       if (result.status !== 200) {
-        return res.status(result.status).json({ success: false, error: "Invalid Email" });
+        return res.status(result.status).json({ success: false, error: "Invalid credentials" });
       }
-
-      const verifyCode = req.body.verifyCode;
 
       if (!verifyCode) {
         return res.status(400).json({ success: false, error: "Please Provide verification code" });
       }
 
-      if (verifyCode !== result.data[0].emailVerificationCode) {
+      if (verifyCode !== result.data[0].verifyCode) {
         return res.status(400).json({ success: false, error: "Invalid Verification code" });
       }
 
-      console.log(result.data[0].emailVerificationCode);
       const id = result.data[0].id;
 
-      data = { emailVerificationCode: null };
+      data = { verifyCode: null };
       await this.crud.update(this.table, data, id);
 
-      result.data[0].emailVerificationCode = undefined;
+      result.data = result.data[0];
+      result.data.verifyCode = undefined;
 
-      const token = this.signToken(result.data[0]);
+      const token = this.signToken(result.data);
 
       result.data.password = undefined;
       result.data.role = undefined;
+      result.data.resetCode = undefined;
+
 
       res.status(200).json({ success: true, token: token, data: result.data });
 
     } catch (error) {
       console.log(error);
-      res.status(400).json({ success: false, error: error });
+      res.status(400).json({ success: false, error: JSON.stringify(error) });
     }
   };
 
@@ -117,9 +128,15 @@ class Auth {
       if (emailRegex.test(emu)) {
         console.log("Email Match+++++++++++++");
         result = await this.crud.read(this.table, { email: emu, archive: false });
+        if (result.data[0].verifyCode) {
+          return res.status(401).json({ success: false, error: 'Please Verify your email to login' });
+        }
       } else if (mobileRegex.test(emu)) {
         console.log("Mobile Number Match+++++++++++++");
         result = await this.crud.read(this.table, { mobileNo: emu, archive: false });
+        if (result.data[0].verifyCode) {
+          return res.status(401).json({ success: false, error: 'Please Verify your mobile number to login' });
+        }
       } else {
         console.log("username Match +++++++++++++");
         result = await this.crud.read(this.table, { username: emu, archive: false });
@@ -129,26 +146,25 @@ class Auth {
         return res.status(result.status).json({ success: false, error: "Invalid credentials" });
       }
 
-      if (result.data[0].emailVerificationCode) {
-        return res.status(401).json({ success: false, error: 'Please Verify your email to login' });
-      }
-
       const comparePassword = await bcrypt.compare(password, result.data[0].password);
       if (!comparePassword) {
         return res.status(result.status).json({ success: false, error: "Invalid credentials" });
       }
 
       result.data = result.data[0];
+      result.data.verifyCode = undefined;
 
       const token = this.signToken(result.data);
 
       result.data.password = undefined;
       result.data.role = undefined;
-      result.data.emailVerificationCode = undefined;
+      result.data.resetCode = undefined;
+
 
       res.status(200).json({ success: true, token: token, data: result.data });
 
     } catch (error) {
+      console.log(error);
       res.status(400).json({ success: false, error: error });
     }
   };
@@ -183,9 +199,9 @@ class Auth {
           return res.status(401).json({ success: false, error: 'unauthorized' });
         }
 
-        // 4) Check if user verify their email address
-        if (currentUser.data[0].emailVerificationCode) {
-          return res.status(401).json({ success: false, error: 'Please Verify your email to Process Further' });
+        // 4) Check if user verify their email or mobile number
+        if (currentUser.data[0].verifyCode) {
+          return res.status(400).json({ success: false, error: 'Please Verify your email or mobile No' });
         }
 
         // 4) Check if user changed password after the token was issued
@@ -208,7 +224,7 @@ class Auth {
       const user = req.user;
 
       // Check if provided current password is correct
-      const comparePassword = await bcrypt.compare(currentPassword, user[0].password);
+      const comparePassword = await bcrypt.compare(currentPassword, user.password);
       if (!comparePassword) {
         return res.status(400).json({ success: false, error: "Current Password is not correct" });
       }
@@ -220,15 +236,13 @@ class Auth {
 
       // Update Password
       newPassword = await bcrypt.hash(newPassword, 12);
-      const id = user[0].id;
+      const id = user.id;
       const data = { password: newPassword };
-      console.log(id, data);
       const result = await this.crud.update(this.table, data, id);
 
       if (result.status !== 200) {
         return res.status(result.status).json({ success: false, error: result.error });
       }
-
 
       res.status(result.status).json({ success: true, data: "Password Changed Successfully! Please login again" });
     } catch (error) {
@@ -257,7 +271,7 @@ class Auth {
       }
 
       if (user.status !== 200) {
-        return res.status(user.status).json({ success: false, error: "No account is associated email or Mobile Number" });
+        return res.status(user.status).json({ success: false, error: "No account is associated to this email or Mobile Number" });
       }
 
       if (step === 1) {
