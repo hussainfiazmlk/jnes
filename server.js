@@ -34,7 +34,7 @@ const crud = new CRUD();
 const api = new API(crud);
 const auth = new Auth(crud);
 
-// signup, signin, resetPassword
+// signup, signin, resetPassword, verifyEmail
 app.post('/api/v1/auth/:method', (req, res) => auth[req.params.method](req, res));
 
 // Update password

@@ -34,6 +34,9 @@ module.exports.definition = {
       },
     },
   },
+  emailVerificationCode: {
+    type: DataTypes.INTEGER
+  },
   mobileNo: {
     type: DataTypes.STRING,
   },

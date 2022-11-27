@@ -32,13 +32,16 @@ class Auth {
         return res.status(400).json({ success: false, error: "Password and confirmPassword not match" });
       }
 
+      // six digit email verification code
+      const emailcode = Math.floor(100000 + Math.random() * 900000);
+
       req.body.password = await bcrypt.hash(password, 12);
       req.body.role = "loggedIn";
+      req.body.emailVerificationCode = emailcode;
 
       const data = { email };
 
       let result = await this.crud.read(this.table, data);
-
       if (!result.data) {
         result = await this.crud.create(this.table, req.body);
       } else {
@@ -49,14 +52,50 @@ class Auth {
         return res.status(result.status).json({ success: false, data: result.error });
       }
 
-      const token = this.signToken(result.data);
+      res.status(result.status).json({ success: true, data: "Register successfully! Please Verify your email" });
+
+    } catch (error) {
+      res.status(400).json({ success: false, error: error });
+    }
+  };
+
+  verifyEmail = async (req, res) => {
+    try {
+      let data = { email: req.body.email };
+
+      const result = await this.crud.read(this.table, data);
+
+      if (result.status !== 200) {
+        return res.status(result.status).json({ success: false, error: "Invalid Email" });
+      }
+
+      const verifyCode = req.body.verifyCode;
+
+      if (!verifyCode) {
+        return res.status(400).json({ success: false, error: "Please Provide verification code" });
+      }
+
+      if (verifyCode !== result.data[0].emailVerificationCode) {
+        return res.status(400).json({ success: false, error: "Invalid Verification code" });
+      }
+
+      console.log(result.data[0].emailVerificationCode);
+      const id = result.data[0].id;
+
+      data = { emailVerificationCode: null };
+      await this.crud.update(this.table, data, id);
+
+      result.data[0].emailVerificationCode = undefined;
+
+      const token = this.signToken(result.data[0]);
 
       result.data.password = undefined;
       result.data.role = undefined;
 
-      res.status(result.status).json({ success: true, token: token, data: result.data });
+      res.status(200).json({ success: true, token: token, data: result.data });
 
     } catch (error) {
+      console.log(error);
       res.status(400).json({ success: false, error: error });
     }
   };
@@ -90,6 +129,9 @@ class Auth {
         return res.status(result.status).json({ success: false, error: "Invalid credentials" });
       }
 
+      if (result.data[0].emailVerificationCode) {
+        return res.status(401).json({ success: false, error: 'Please Verify your email to login' });
+      }
 
       const comparePassword = await bcrypt.compare(password, result.data[0].password);
       if (!comparePassword) {
@@ -102,8 +144,7 @@ class Auth {
 
       result.data.password = undefined;
       result.data.role = undefined;
-
-      // console.log(result);
+      result.data.emailVerificationCode = undefined;
 
       res.status(200).json({ success: true, token: token, data: result.data });
 
@@ -142,6 +183,11 @@ class Auth {
           return res.status(401).json({ success: false, error: 'unauthorized' });
         }
 
+        // 4) Check if user verify their email address
+        if (currentUser.data[0].emailVerificationCode) {
+          return res.status(401).json({ success: false, error: 'Please Verify your email to Process Further' });
+        }
+
         // 4) Check if user changed password after the token was issued
         if (decoded.user.password !== currentUser.data[0].password) {
           return res.status(401).json({ success: false, error: 'unauthorized' });
@@ -162,7 +208,7 @@ class Auth {
       const user = req.user;
 
       // Check if provided current password is correct
-      const comparePassword = await bcrypt.compare(currentPassword, user.password);
+      const comparePassword = await bcrypt.compare(currentPassword, user[0].password);
       if (!comparePassword) {
         return res.status(400).json({ success: false, error: "Current Password is not correct" });
       }
@@ -174,9 +220,9 @@ class Auth {
 
       // Update Password
       newPassword = await bcrypt.hash(newPassword, 12);
-      const id = user.id;
+      const id = user[0].id;
       const data = { password: newPassword };
-
+      console.log(id, data);
       const result = await this.crud.update(this.table, data, id);
 
       if (result.status !== 200) {
@@ -186,6 +232,7 @@ class Auth {
 
       res.status(result.status).json({ success: true, data: "Password Changed Successfully! Please login again" });
     } catch (error) {
+      console.log(error);
       res.status(400).json({ success: false, error: error });
     }
   };

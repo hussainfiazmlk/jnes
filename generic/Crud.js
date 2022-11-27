@@ -177,6 +177,7 @@ const syncModelsWithDB = (db, path) => {
                 // sync db with models
                 if (process.env.NODE_ENV === "development") {
                     console.log("inside dev");
+                    // await db.sync();
                     await db.sync({ alter: true }); // { force: true }, { alter: true }
                     console.log("models synced with database");
                 } else {
