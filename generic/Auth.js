@@ -167,7 +167,7 @@ class Auth {
         return res.status(400).json({ success: false, error: "Current Password is not correct" });
       }
 
-      // Check newPassowrd
+      // Check newPassowrd and confirmPassword match
       if (newPassword !== confirmPassword) {
         return res.status(400).json({ success: false, error: "newPassword and confirmPassword not match" });
       }
@@ -189,6 +189,90 @@ class Auth {
       res.status(400).json({ success: false, error: error });
     }
   };
+
+  resetPassword = async (req, res) => {
+    try {
+      const { step, eorm, resetCode } = req.body;
+
+
+      // eslint-disable-next-line
+      const mobileRegex = /^[+]*[(]{0,1}[0-9]{1,3}[)]{0,1}[-\s\./0-9]{8,14}$/g;
+      // eslint-disable-next-line
+      const emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
+
+      let user;
+      if (emailRegex.test(eorm)) {
+        console.log("Email Match+++++++++++++");
+        user = await this.crud.read(this.table, { email: eorm, archive: false });
+      } else if (mobileRegex.test(eorm)) {
+        console.log("Mobile Number Match+++++++++++++");
+        user = await this.crud.read(this.table, { mobileNo: eorm, archive: false });
+      }
+
+      if (user.status !== 200) {
+        return res.status(user.status).json({ success: false, error: "No account is associated email or Mobile Number" });
+      }
+
+      if (step === 1) {
+        // 6 digit random code generator
+        let reset_code = Math.floor(100000 + Math.random() * 900000);
+        const data = { resetCode: reset_code };
+        const id = user.data[0].id;
+
+        const result = await this.crud.update(this.table, data, id);
+
+        if (result.status !== 200) {
+          return res.status(result.status).json({ success: false, error: 'Unable to send OTP' });
+        }
+
+        return res.status(result.status).json({ success: true, data: "OTP Send! Please verify it" });
+      }
+
+      if (step === 2) {
+        const data = { resetCode, id: user.data[0].id };
+
+        const result = await this.crud.read(this.table, data);
+
+        if (result.status !== 200) {
+          return res.status(result.status).send({ success: false, error: 'OTP code is not correct' });
+        }
+
+        return res.status(result.status).json({ success: true, data: "OTP Verified! Please reset Your Password" });
+      }
+
+      if (step === 3) {
+        let data = { resetCode, id: user.data[0].id };
+
+        let result = await this.crud.read(this.table, data);
+
+        if (result.status !== 200) {
+          return res.status(result.status).send({ success: false, error: 'OTP code is not correct' });
+        }
+
+        let password = req.body.password;
+        if (!password) {
+          return res.status(result.status).send({ success: false, error: 'Please enter new passsword' });
+        }
+
+        password = await bcrypt.hash(password, 12);
+
+        data = { resetCode: null, password };
+        const id = user.data[0].id;
+
+        result = await this.crud.update(this.table, data, id);
+
+        if (result.status !== 200) {
+          return res.status(result.status).json({ success: false, error: 'Unable to Reset Password' });
+        }
+
+        return res.status(result.status).json({ success: true, data: "Password Reset Successfully" });
+      }
+
+    } catch (error) {
+      res.status(400).json({ success: false, error: error });
+    }
+  };
+
 }
 
 module.exports = Auth;
