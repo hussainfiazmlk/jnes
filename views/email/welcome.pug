@@ -1,0 +1,15 @@
+extends baseEmail
+
+block content
+  p(align='center') Welcome to JNES family 
+  p(align='center') Your Email Verification Code is
+  table.btn.btn-primary(role='presentation', border='0', cellpadding='0', cellspacing='0')
+    tbody
+      tr
+        td(align='center')
+          table(role='presentation', border='0', cellpadding='0', cellspacing='0')
+            tbody
+              tr
+                td
+                  a(href='#', target='_blank') #{token}
+  p(align='center') Please Verify Your Email to Process Further

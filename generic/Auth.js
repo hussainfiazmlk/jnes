@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const Cryptr = require('cryptr');
+const Email = require('./../utils/Notifications');
 
 
 class Auth {
@@ -44,6 +45,9 @@ class Auth {
       let result = await this.crud.read(this.table, data);
       if (!result.data) {
         result = await this.crud.create(this.table, req.body);
+        // TODO: send email verification code to provided email address
+        await new Email(email, codeToVerify).sendWelcome();
+
       } else {
         return res.status(400).json({ success: false, error: "User Already Exit" });
       }
@@ -51,8 +55,6 @@ class Auth {
       if (result.status !== 200 && result.status !== 201) {
         return res.status(result.status).json({ success: false, data: result.error });
       }
-
-      // TODO: send email verification code to provided email address
 
       res.status(result.status).json({ success: true, data: "Register successfully! Please Verify your email" });
 
@@ -276,9 +278,15 @@ class Auth {
 
       if (step === 1) {
         // 6 digit random code generator
-        let reset_code = Math.floor(100000 + Math.random() * 900000);
-        const data = { resetCode: reset_code };
+        let codeToVerify = Math.floor(100000 + Math.random() * 900000);
+        const data = { resetCode: codeToVerify };
         const id = user.data[0].id;
+
+        if (emailRegex.test(eorm)) {
+          await new Email(user.data[0].email, codeToVerify).sendPasswordReset();
+        }
+
+        // TODO OTP Code on Mobile Number
 
         const result = await this.crud.update(this.table, data, id);
 
